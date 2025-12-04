@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Time Card System</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            box-sizing: border-box;
+        }
+        .container {
+            text-align: center;
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            width: 90%;
+            max-width: 600px;
+            position: relative;
+        }
+        .logo {
+            max-width: 150px;
+            margin-bottom: 20px;
+        }
+        h1, h2 {
+            color: #333;
+            font-size: 24px;
+        }
+        input, select, button {
+            font-size: 16px;
+            padding: 10px;
+            margin: 10px auto;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+            width: 80%;
+            max-width: 300px;
+            box-sizing: border-box;
+            display: block;
+        }
+        button {
+            background-color: #007BFF;
+            color: white;
+            border: none;
+            cursor: pointer;
+            width: 60%;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .main-menu-button {
+            background-color: #28a745;
+            width: 50%;
+        }
+        .main-menu-button:hover {
+            background-color: #218838;
+        }
+        .report-button, .print-report-button {
+            background-color: #007BFF;
+            width: 60%;
+        }
+        .report-button:hover, .print-report-button:hover {
+            background-color: #0056b3;
+        }
+        .hidden {
+            display: none;
+        }
+        #options button {
+            display: block;
+            width: 80%;
+            margin: 10px auto;
+        }
+        #management-content {
+            margin-top: 20px;
+            text-align: center;
+        }
+        #management-content input, #management-content select {
+            width: auto;
+            display: inline-block;
+        }
+        #management-content button {
+            display: block;
+            margin: 10px auto;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px auto;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #007BFF;
+            color: white;
+        }
+        .version {
+            font-size: 12px;
+            color: #666;
+            margin-top: 20px;
+            position: relative;
+        }
+        #recent-punches {
+            text-align: left;
+            margin: 20px 0;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        #recent-punches h4 {
+            text-align: center;
+        }
+        .punch-item {
+            border: 1px solid #ddd;
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 5px;
+            background: #f9f9f9;
+        }
+        @media (max-width: 600px) {
+            body { padding: 10px; }
+            .container { width: 100%; padding: 20px; }
+        }
+        @media print {
+            body { background: white; padding: 0; }
+            .container { box-shadow: none; padding: 0; width: 100%; margin: 0; }
+            .logo, button, .version, .main-menu-button { display: none; }
+            #report-output { margin: 0; }
+            table th, table td { border: 1px solid #000; }
+        }
+    </style>
+</head>
+<body>
+    <div id="login-screen" class="container">
+        <img src="logo.jpg" alt="Company Logo" class="logo">
+        <h1>WAG ON / WAG OFF</h1>
+        <input type="password" id="pin-input" placeholder="Enter 4-digit PIN" maxlength="4">
+        <button onclick="handlePinEntry()">Submit</button>
+        <div class="version">v0.67 - Beaner Engineering Co. 2025</div>
+    </div>
+
+    <div id="employee-screen" class="container hidden">
+        <h2 id="greeting"></h2>
+        <p id="datetime"></p>
+        <div id="recent-punches"></div>
+        <div id="options"></div>
+        <button onclick="goToMainMenu()" class="main-menu-button">Main Menu</button>
+        <div class="version">v0.67 - Beaner Engineering Co. 2025</div>
+    </div>
+
+    <div id="management-screen" class="container hidden">
+        <img src="logo.jpg" alt="Company Logo" class="logo">
+        <h2>Management Panel</h2>
+        <button onclick="showAddEmployee()">Add New Employee</button>
+        <button onclick="showEditPins()">Edit/Delete Employees & PINs</button>
+        <button onclick="showEditTime()">Edit Time Entries</button>
+        <button onclick="showReports()">Generate Reports</button>
+        <button onclick="showTrackChanges()">Track Changes Report</button>
+        <button onclick="showClockedIn()">Who's Clocked In</button>
+        <button onclick="exportToCSV()">Export Data to CSV</button>
+        <div id="management-content" class="hidden"></div>
+        <button onclick="goToMainMenu()" class="main-menu-button">Logout</button>
+        <div class="version">v0.67 - Beaner Engineering Co. 2025</div>
+    </div>
+
+    <script>
+        // Initialize data
+        let employees = JSON.parse(localStorage.getItem("employees")) || {};
+        let timeEntries = JSON.parse(localStorage.getItem("timeEntries")) || {};
+        let editLogs = JSON.parse(localStorage.getItem("editLogs")) || [];
+        const managementPin = "1965"; // Default management PIN
+
+        function getLocalISO(date = new Date()) {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            const hours = String(date.getHours()).padStart(2, '0');
+            const minutes = String(date.getMinutes()).padStart(2, '0');
+            return `${year}-${month}-${day}T${hours}:${minutes}:00`;
+        }
+
+        function parseLocalDate(localISO) {
+            if (!localISO) return null;
+            // Parse as local date
+            const [datePart, timePart] = localISO.split('T');
+            const [year, month, day] = datePart.split('-').map(Number);
+            const [hours, minutes] = timePart.split(':').map(Number);
+            const date = new Date(year, month - 1, day, hours, minutes);
+            if (isNaN(date.getTime())) return null;
+            return date;
+        }
+
+        function saveData() {
+            localStorage.setItem("employees", JSON.stringify(employees));
+            localStorage.setItem("timeEntries", JSON.stringify(timeEntries));
+            localStorage.setItem("editLogs", JSON.stringify(editLogs));
+        }
+
+        function logEdit(pin, action, details = {}) {
+            editLogs.push({
+                pin,
+                employee: employees[pin],
+                date: new Date().toISOString(),
+                action,
+                ...details
+            });
+            saveData();
+        }
+
+        function formatDateTime(date) {
+            return date.toLocaleString('en-US', {
+                month: '2-digit',
+                day: '2-digit',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: true
+            });
+        }
+
+        function displayRecentPunches(pin) {
+            const punchesDiv = document.getElementById("recent-punches");
+            punchesDiv.innerHTML = "";
+            const entries = timeEntries[pin]?.entries || [];
+            const now = new Date();
+            const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+            const recentEntries = entries.filter(e => e.in && parseLocalDate(e.in) >= sevenDaysAgo).slice(-7);
+
+            if (recentEntries.length === 0) {
+                punchesDiv.innerHTML = "<h4>Last 7 Days: No punches recorded.</h4>";
+                return;
+            }
+
+            punchesDiv.innerHTML = `<h4>Last 7 Days Punches (${recentEntries.length} shown)</h4>`;
+            recentEntries.forEach(entry => {
+                const inTime = parseLocalDate(entry.in);
+                if (!inTime) return;
+                const punchItem = document.createElement("div");
+                punchItem.className = "punch-item";
+                punchItem.innerHTML = `<strong>Punch In:</strong> ${formatDateTime(inTime)}<br>`;
+                if (entry.lunch_out) {
+                    const lo = parseLocalDate(entry.lunch_out);
+                    if (lo) punchItem.innerHTML += `<strong>Lunch Out:</strong> ${formatDateTime(lo)}<br>`;
+                }
+                if (entry.lunch_in) {
+                    const li = parseLocalDate(entry.lunch_in);
+                    if (li) punchItem.innerHTML += `<strong>Lunch In:</strong> ${formatDateTime(li)}<br>`;
+                }
+                if (entry.out) {
+                    const outTime = parseLocalDate(entry.out);
+                    if (outTime) {
+                        let durationMs = outTime - inTime;
+                        if (entry.lunch_out && entry.lunch_in) {
+                            const lo = parseLocalDate(entry.lunch_out);
+                            const li = parseLocalDate(entry.lunch_in);
+                            if (lo && li) durationMs -= (li - lo);
+                        }
+                        const hours = (durationMs / (1000 * 60 * 60)).toFixed(2);
+                        punchItem.innerHTML += `<strong>Punch Out:</strong> ${formatDateTime(outTime)}<br><strong>Duration:</strong> ${hours} hours`;
+                    }
+                } else {
+                    punchItem.innerHTML += "<em>Currently clocked in</em>";
+                }
+                punchesDiv.appendChild(punchItem);
+            });
+        }
+
+        function handlePinEntry() {
+            const pin = document.getElementById("pin-input").value.trim();
+            if (!pin) {
+                alert("Please enter a PIN!");
+                return;
+            }
+            if (pin === managementPin) {
+                showManagementScreen();
+            } else if (employees[pin]) {
+                showEmployeeScreen(pin);
+            } else {
+                alert("Invalid PIN!");
+            }
+            document.getElementById("pin-input").value = "";
+        }
+
+        function showEmployeeScreen(pin) {
+            const name = employees[pin];
+            document.getElementById("login-screen").classList.add("hidden");
+            document.getElementById("employee-screen").classList.remove("hidden");
+            document.getElementById("greeting").innerText = `Hello, ${name}!`;
+            
+            const now = new Date();
+            document.getElementById("datetime").innerText = now.toLocaleString();
+
+            displayRecentPunches(pin);
+
+            const optionsDiv = document.getElementById("options");
+            optionsDiv.innerHTML = "";
+            const entries = timeEntries[pin]?.entries || [];
+            for (let i = entries.length - 1; i >= 0; i--) {
+                const entry = entries[i];
+                if (entry.out !== undefined) continue;
+                if (!entry.in) {
+                    entries.splice(i, 1);
+                    continue;
+                }
+            }
+            saveData();
+            const lastEntry = timeEntries[pin]?.entries?.slice(-1)[0];
+            let status = "out";
+            if (lastEntry && lastEntry.out === undefined) {
+                if (lastEntry.lunch_out && lastEntry.lunch_in === undefined) {
+                    status = "lunch_out";
+                } else {
+                    status = "in";
+                }
+            }
+
+            if (status === "out") {
+                optionsDiv.innerHTML = `<button onclick="clockIn('${pin}')">Clock In</button>`;
+            } else if (status === "lunch_out") {
+                optionsDiv.innerHTML = `<button onclick="clockInLunch('${pin}')">Clock In from Lunch</button>`;
+            } else if (status === "in") {
+                optionsDiv.innerHTML = `
+                    <button onclick="clockOut('${pin}')">Clock Out</button>
+                    <button onclick="clockOutLunch('${pin}')">Clock Out for Lunch</button>
+                `;
+            }
+        }
+
+        function clockIn(pin) {
+            const entries = timeEntries[pin]?.entries || [];
+            for (let i = entries.length - 1; i >= 0; i--) {
+                if (entries[i].out === undefined) {
+                    entries.splice(i, 1);
+                    break;
+                }
+            }
+            timeEntries[pin] = { entries };
+            timeEntries[pin].entries.push({ in: getLocalISO() });
+            saveData();
+            alert(`Thank you, ${employees[pin]}! You are now clocked in.`);
+            goToMainMenu();
+        }
+
+        function clockOut(pin) {
+            const entries = timeEntries[pin]?.entries || [];
+            const lastEntry = entries[entries.length - 1];
+            if (lastEntry && lastEntry.out === undefined && (lastEntry.lunch_in !== undefined || lastEntry.lunch_out === undefined)) {
+                lastEntry.out = getLocalISO();
+                saveData();
+                alert(`Thank you, ${employees[pin]}! You are now clocked out.`);
+            } else {
+                alert("You must be clocked in to clock out!");
+            }
+            goToMainMenu();
+        }
+
+        function clockOutLunch(pin) {
+            const entries = timeEntries[pin]?.entries || [];
+            const lastEntry = entries[entries.length - 1];
+            if (lastEntry && lastEntry.out === undefined && lastEntry.lunch_out === undefined) {
+                lastEntry.lunch_out = getLocalISO();
+                saveData();
+                alert(`Enjoy your lunch, ${employees[pin]}!`);
+            } else {
+                alert("You must be clocked in (not on lunch) to clock out for lunch!");
+            }
+            goToMainMenu();
+        }
+
+        function clockInLunch(pin) {
+            const entries = timeEntries[pin]?.entries || [];
+            const lastEntry = entries[entries.length - 1];
+            if (lastEntry && lastEntry.lunch_out && lastEntry.lunch_in === undefined && lastEntry.out === undefined) {
+                lastEntry.lunch_in = getLocalISO();
+                saveData();
+                alert(`Welcome back from lunch, ${employees[pin]}!`);
+            } else {
+                alert("You must be on lunch break to clock in from lunch!");
+            }
+            goToMainMenu();
+        }
+
+        function showManagementScreen() {
+            document.getElementById("login-screen").classList.add("hidden");
+            document.getElementById("management-screen").classList.remove("hidden");
+            document.getElementById("management-content").classList.add("hidden");
+        }
+
+        function showAddEmployee() {
+            const content = document.getElementById("management-content");
+            content.classList.remove("hidden");
+            content.innerHTML = `
+                <h3>Add New Employee</h3>
+                <input id="new-name" placeholder="Employee Name">
+                <input id="new-pin" maxlength="4" placeholder="4-digit PIN">
+                <button onclick="addEmployee()">Save Employee</button>
+                <button onclick="goToManagementMenu()">Back</button>
+            `;
+        }
+
+        function addEmployee() {
+            const name = document.getElementById("new-name").value.trim();
+            const pin = document.getElementById("new-pin").value.trim();
+            if (name && pin && pin.length === 4 && !employees[pin] && pin !== managementPin) {
+                employees[pin] = name;
+                timeEntries[pin] = { entries: [] };
+                saveData();
+                alert("Employee added successfully!");
+                showManagementScreen();
+            } else {
+                alert("Invalid input! Ensure name is provided, PIN is 4 digits, and not already in use.");
+            }
+        }
+
+        function showEditPins() {
+            const content = document.getElementById("management-content");
+            content.classList.remove("hidden");
+            // Sort employees by name
+            const sortedEmployees = Object.entries(employees).sort(([,a], [,b]) => a.localeCompare(b));
+            content.innerHTML = "<h3>Edit Employees & PINs</h3>";
+            sortedEmployees.forEach(([pin, name]) => {
+                content.innerHTML += `
+                    <div style="margin-bottom: 10px;">
+                        <span>${name} (Current PIN: ${pin})</span><br>
+                        <input id="pin-${pin}" maxlength="4" placeholder="New 4-digit PIN">
+                        <button onclick="changePin('${pin}')">Change PIN</button>
+                        <button onclick="deleteEmployee('${pin}')">Delete Employee</button>
+                    </div>
+                `;
+            });
+            content.innerHTML += `<button onclick="goToManagementMenu()">Back</button>`;
+        }
+
+        function changePin(oldPin) {
+            const newPin = document.getElementById(`pin-${oldPin}`).value.trim();
+            if (newPin && newPin.length === 4 && !employees[newPin] && newPin !== managementPin) {
+                employees[newPin] = employees[oldPin];
+                delete employees[oldPin];
+                timeEntries[newPin] = timeEntries[oldPin];
+                delete timeEntries[oldPin];
+                saveData();
+                alert("PIN changed successfully!");
+                showEditPins();
+            } else {
+                alert("Invalid new PIN! Must be 4 digits and unique.");
+            }
+        }
+
+        function deleteEmployee(pin) {
+            if (confirm(`Delete ${employees[pin]} (PIN: ${pin})? This removes all time entries.`)) {
+                delete employees[pin];
+                delete timeEntries[pin];
+                saveData();
+                alert("Employee deleted!");
+                showEditPins();
+            }
+        }
+
+        function showEditTime() {
+            const content = document.getElementById("management-content");
+            content.classList.remove("hidden");
+            // Sort employees by name
+            const sortedEmployees = Object.entries(employees).sort(([,a], [,b]) => a.localeCompare(b));
+            content.innerHTML = `
+                <h3>Edit Time Entries</h3>
+                <select id="edit-employee">${sortedEmployees.map(([p, n]) => `<option value="${p}">${n}</option>`).join('')}</select>
+                <button onclick="loadTimeEntries()">Load Entries</button>
+                <div id="time-entries"></div>
+                <h4>Add New Entry</h4>
+                <label>In: <input type="datetime-local" id="new-in"></label><br>
+                <label>Lunch Out: <input type="datetime-local" id="new-lo"></label><br>
+                <label>Lunch In: <input type="datetime-local" id="new-li"></label><br>
+                <label>Out: <input type="datetime-local" id="new-out"></label><br>
+                <button onclick="addNewEntry()">Add Entry</button>
+                <button onclick="saveData()">Save All Changes</button>
+                <button onclick="goToManagementMenu()">Back</button>
+            `;
+        }
+
+        function addNewEntry() {
+            const pin = document.getElementById("edit-employee").value;
+            const newIn = document.getElementById("new-in").value;
+            if (!newIn) {
+                alert("Must provide In time!");
+                return;
+            }
+            const entry = { in: newIn + ':00' };
+            const lo = document.getElementById("new-lo").value;
+            if (lo) entry.lunch_out = lo + ':00';
+            const li = document.getElementById("new-li").value;
+            if (li) entry.lunch_in = li + ':00';
+            const out = document.getElementById("new-out").value;
+            if (out) entry.out = out + ':00';
+            timeEntries[pin].entries.push(entry);
+            logEdit(pin, 'add', { newEntry: entry });
+            saveData();
+            loadTimeEntries();
+            // Clear inputs
+            document.getElementById("new-in").value = '';
+            document.getElementById("new-lo").value = '';
+            document.getElementById("new-li").value = '';
+            document.getElementById("new-out").value = '';
+        }
+
+        function loadTimeEntries() {
+            const pin = document.getElementById("edit-employee").value;
+            const entriesDiv = document.getElementById("time-entries");
+            entriesDiv.innerHTML = "";
+            const entries = timeEntries[pin]?.entries || [];
+            const now = new Date();
+            const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+            const filteredEntries = entries.filter(e => e.in && parseLocalDate(e.in) >= sevenDaysAgo);
+            filteredEntries.forEach((entry, originalIndex) => {
+                // Find original index for editing
+                const index = entries.findIndex(e => e === entry);
+                const inVal = entry.in ? entry.in.slice(0, 16) : '';
+                const loVal = entry.lunch_out ? entry.lunch_out.slice(0, 16) : '';
+                const liVal = entry.lunch_in ? entry.lunch_in.slice(0, 16) : '';
+                const outVal = entry.out ? entry.out.slice(0, 16) : '';
+                const entryDiv = document.createElement('div');
+                entryDiv.style = "border: 1px solid #ddd; padding: 10px; margin: 10px 0;";
+                entryDiv.innerHTML = `
+                    <label>In: <input type="datetime-local" value="${inVal}" id="in-${pin}-${index}" onchange="editEntry('${pin}', ${index}, 'in', this.value)"></label><br>
+                    <label>Lunch Out: <input type="datetime-local" value="${loVal}" id="lo-${pin}-${index}" onchange="editEntry('${pin}', ${index}, 'lunch_out', this.value)"></label><br>
+                    <label>Lunch In: <input type="datetime-local" value="${liVal}" id="li-${pin}-${index}" onchange="editEntry('${pin}', ${index}, 'lunch_in', this.value)"></label><br>
+                    <label>Out: <input type="datetime-local" value="${outVal}" id="out-${pin}-${index}" onchange="editEntry('${pin}', ${index}, 'out', this.value)"></label><br>
+                    <button onclick="deleteEntry('${pin}', ${index})">Delete This Entry</button>
+                `;
+                entriesDiv.appendChild(entryDiv);
+            });
+        }
+
+        function editEntry(pin, index, field, value) {
+            const entry = timeEntries[pin].entries[index];
+            const oldValue = entry[field];
+            if (value) {
+                // Parse and reformat to ensure correct local time with padded minutes
+                const date = new Date(value + ':00');
+                if (!isNaN(date.getTime())) {
+                    const localStr = getLocalISO(date);
+                    entry[field] = localStr;
+                }
+            } else {
+                delete entry[field];
+            }
+            if (!entry.in) {
+                timeEntries[pin].entries.splice(index, 1);
+            } else {
+                // Log change if value changed
+                if (oldValue !== entry[field]) {
+                    logEdit(pin, 'edit', { field, oldValue, newValue: entry[field] });
+                }
+            }
+            saveData();
+            // Delay reload to allow input to update
+            setTimeout(() => loadTimeEntries(), 100);
+        }
+
+        function deleteEntry(pin, index) {
+            if (confirm("Delete this time entry?")) {
+                const deletedEntry = timeEntries[pin].entries[index];
+                timeEntries[pin].entries.splice(index, 1);
+                logEdit(pin, 'delete', { deletedEntry });
+                saveData();
+                loadTimeEntries();
+            }
+        }
+
+        function showReports() {
+            const content = document.getElementById("management-content");
+            content.classList.remove("hidden");
+            // Sort employees by name
+            const sortedEmployees = Object.entries(employees).sort(([,a], [,b]) => a.localeCompare(b));
+            content.innerHTML = `
+                <h3>Time Reports</h3>
+                <label>Start Date: <input type="date" id="start-date"></label><br>
+                <label>End Date: <input type="date" id="end-date"></label><br>
+                <label>Employee: <select id="report-employee">
+                    <option value="all">All Employees</option>
+                    <option value="hours_only">Employees with Hours in Period</option>
+                    ${sortedEmployees.map(([p, n]) => `<option value="${p}">${n}</option>`).join('')}
+                </select></label><br>
+                <button onclick="generateReport()">Generate Report</button>
+                <div id="report-output"></div>
+                <button onclick="printReport()" class="print-report-button" id="print-btn" style="display:none;">Print Report</button>
+                <button onclick="goToManagementMenu()">Back</button>
+            `;
+            const today = new Date();
+            document.getElementById("start-date").value = today.toISOString().slice(0, 10);
+            document.getElementById("end-date").value = today.toISOString().slice(0, 10);
+        }
+
+        function generateReport() {
+            const startStr = document.getElementById("start-date").value;
+            const endStr = document.getElementById("end-date").value;
+            const start = new Date(startStr + 'T00:00:00');
+            const end = new Date(endStr + 'T23:59:59');
+            let employeePin = document.getElementById("report-employee").value;
+            const reportDiv = document.getElementById("report-output");
+            reportDiv.innerHTML = "<h4>Time Report (Regular & OT >40h/week)</h4>";
+
+            let pins = [];
+            if (employeePin === "all" || employeePin === "hours_only") {
+                pins = Object.keys(employees);
+            } else {
+                pins = [employeePin];
+            }
+
+            let reportData = [];
+            pins.forEach(pin => {
+                const entries = (timeEntries[pin]?.entries || []).filter(e => {
+                    if (!e.in) return false;
+                    const inDate = parseLocalDate(e.in);
+                    return inDate && inDate >= start && inDate <= end;
+                });
+                let totalHours = 0;
+                let overtime = 0;
+                const weeklyHours = {};
+                const dailyHours = {};
+                entries.forEach(entry => {
+                    if (entry.out) {
+                        const inTime = parseLocalDate(entry.in);
+                        const outTime = parseLocalDate(entry.out);
+                        if (!inTime || !outTime) return;
+                        let durationMs = outTime - inTime;
+                        if (entry.lunch_out && entry.lunch_in) {
+                            const lo = parseLocalDate(entry.lunch_out);
+                            const li = parseLocalDate(entry.lunch_in);
+                            if (lo && li) durationMs -= (li - lo);
+                        }
+                        const hours = durationMs / (1000 * 60 * 60);
+                        totalHours += hours;
+
+                        const dayKey = inTime.toISOString().slice(0, 10);
+                        dailyHours[dayKey] = (dailyHours[dayKey] || 0) + hours;
+
+                        const weekStart = new Date(inTime);
+                        weekStart.setDate(weekStart.getDate() - inTime.getDay());
+                        weekStart.setHours(0, 0, 0, 0);
+                        const weekKey = weekStart.toISOString().slice(0, 10);
+                        weeklyHours[weekKey] = (weeklyHours[weekKey] || 0) + hours;
+                    }
+                });
+
+                Object.values(weeklyHours).forEach(h => {
+                    if (h > 40) overtime += h - 40;
+                });
+                const regular = totalHours - overtime;
+
+                let dailyHtml = `<h5>${employees[pin]} - Daily Hours</h5><table><tr><th>Date</th><th>Hours</th></tr>`;
+                Object.entries(dailyHours).sort(([a], [b]) => a.localeCompare(b)).forEach(([date, h]) => {
+                    dailyHtml += `<tr><td>${date}</td><td>${h.toFixed(2)}</td></tr>`;
+                });
+                dailyHtml += "</table>";
+
+                reportData.push({ name: employees[pin], regular, overtime, totalHours, dailyHtml });
+            });
+
+            // Filter if hours_only
+            if (employeePin === "hours_only") {
+                reportData = reportData.filter(d => d.totalHours > 0);
+            }
+
+            // Sort reportData by name
+            reportData.sort((a, b) => a.name.localeCompare(b.name));
+
+            let totalsHtml = `<h5>Pay Period Totals</h5><table><tr><th>Name</th><th>Total Hours</th><th>Regular</th><th>OT</th></tr>`;
+            reportData.forEach(d => {
+                const total = d.regular + d.overtime;
+                totalsHtml += `<tr><td>${d.name}</td><td>${total.toFixed(2)}</td><td>${d.regular.toFixed(2)}</td><td>${d.overtime.toFixed(2)}</td></tr>`;
+                reportDiv.innerHTML += d.dailyHtml;
+            });
+            totalsHtml += "</table>";
+            reportDiv.innerHTML += totalsHtml;
+            document.getElementById("print-btn").style.display = "inline-block";
+        }
+
+        function printReport() {
+            const reportContent = document.getElementById("report-output").innerHTML;
+            const printWindow = window.open('', '', 'height=600,width=800');
+            printWindow.document.write(`
+                <html>
+                <head><title>Time Card Report</title>
+                <style>
+                    body { font-family: Arial, sans-serif; margin: 0; padding: 20px; }
+                    h4, h5 { text-align: center; color: #007BFF; }
+                    table { width: 100%; border-collapse: collapse; margin: 10px 0; }
+                    th, td { border: 1px solid #000; padding: 8px; text-align: left; }
+                    th { background-color: #007BFF; color: white; }
+                </style>
+                </head>
+                <body>
+                    <h4>Time Card Report - Regular & OT</h4>
+                    ${reportContent}
+                </body>
+                </html>
+            `);
+            printWindow.document.close();
+            printWindow.print();
+        }
+
+        function showTrackChanges() {
+            const content = document.getElementById("management-content");
+            content.classList.remove("hidden");
+            const uniquePins = [...new Set(editLogs.map(log => log.pin))];
+            let html = `<h3>Track Changes Report</h3>
+                <p>Number of employees edited: ${uniquePins.length}</p>
+                <table><tr><th>Employee</th><th>Date</th><th>Action</th><th>Details</th></tr>`;
+            // Sort logs by date desc
+            editLogs.sort((a,b) => new Date(b.date) - new Date(a.date));
+            editLogs.forEach(log => {
+                const details = JSON.stringify(log.details || {}, null, 2).replace(/\n/g, '<br>');
+                html += `<tr><td>${log.employee}</td><td>${formatDateTime(new Date(log.date))}</td><td>${log.action}</td><td>${details}</td></tr>`;
+            });
+            html += "</table><button onclick='goToManagementMenu()'>Back</button>";
+            content.innerHTML = html;
+        }
+
+        function showClockedIn() {
+            const content = document.getElementById("management-content");
+            content.classList.remove("hidden");
+            // Sort employees by name
+            const sortedEmployees = Object.entries(employees).sort(([,a], [,b]) => a.localeCompare(b));
+            let html = `<h3>Who's Clocked In</h3><ul>`;
+            let clockedInCount = 0;
+            sortedEmployees.forEach(([pin]) => {
+                const lastEntry = timeEntries[pin]?.entries?.slice(-1)[0];
+                if (lastEntry && lastEntry.out === undefined) {
+                    clockedInCount++;
+                    const inTime = parseLocalDate(lastEntry.in);
+                    html += `<li>${employees[pin]} - Clocked in since ${inTime ? formatDateTime(inTime) : 'Unknown'}</li>`;
+                }
+            });
+            html += `</ul><p>Total clocked in: ${clockedInCount}</p><button onclick='goToManagementMenu()'>Back</button>`;
+            if (clockedInCount === 0) html += "<p>No one is currently clocked in.</p>";
+            content.innerHTML = html;
+        }
+
+        function exportToCSV() {
+            let csv = "PIN,Name,In,Lunch Out,Lunch In,Out\n";
+            for (const pin in timeEntries) {
+                if (!employees[pin]) continue;
+                timeEntries[pin].entries.forEach(entry => {
+                    csv += `"${pin}","${employees[pin]}","${entry.in || ''}","${entry.lunch_out || ''}","${entry.lunch_in || ''}","${entry.out || ''}"\n`;
+                });
+            }
+            const blob = new Blob([csv], { type: "text/csv" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `timecard_export_${new Date().toISOString().slice(0, 10)}.csv`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function goToMainMenu() {
+            document.getElementById("login-screen").classList.remove("hidden");
+            document.getElementById("employee-screen").classList.add("hidden");
+            document.getElementById("management-screen").classList.add("hidden");
+            document.getElementById("management-content").classList.add("hidden");
+            document.getElementById("pin-input").focus();
+        }
+
+        function goToManagementMenu() {
+            document.getElementById("management-content").classList.add("hidden");
+            showManagementScreen();
+        }
+
+        // Enter key support for PIN
+        document.getElementById("pin-input").addEventListener("keypress", function(e) {
+            if (e.key === "Enter") handlePinEntry();
+        });
+
+        // Migrate old UTC data to local on load if needed
+        Object.keys(timeEntries).forEach(pin => {
+            timeEntries[pin].entries.forEach(entry => {
+                ['in', 'lunch_out', 'lunch_in', 'out'].forEach(field => {
+                    if (entry[field] && entry[field].endsWith('Z')) {
+                        const utcDate = new Date(entry[field]);
+                        entry[field] = getLocalISO(utcDate);
+                    }
+                });
+            });
+        });
+        saveData();
+    </script>
+</body>
+</html>
