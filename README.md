@@ -1,1 +1,1 @@
-AC Plus plus time card program.
+A C++ plus time card program.
